@@ -26,3 +26,6 @@ jobs:
         run: python3 -m py_compile scripts/jumpseat.py && python3 scripts/jumpseat.py --help
       - name: Build image
         run: docker compose -f docker/compose.yaml build
+      # A green build does not mean the desktop works: start it and look for XFCE, Remmina and noVNC
+      - name: Start the desktop
+        run: scripts/smoke-test.sh jumpseat
