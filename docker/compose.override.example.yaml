@@ -1,0 +1,8 @@
+# Copy to compose.override.yaml (git-ignored) for local settings; jumpseat.py up loads it automatically.
+services:
+  jumpseat:
+    # Lets short host names resolve, e.g. "server01" -> "server01.example.com"
+    dns_search:
+      - example.com
+    # extra_hosts:
+    #   - "myserver:192.168.1.10"

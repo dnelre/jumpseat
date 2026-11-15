@@ -1,0 +1,24 @@
+# Fixed project name keeps the "jumpseat_home" volume regardless of the folder name
+name: jumpseat
+
+services:
+  jumpseat:
+    build:
+      context: .
+      args:
+        FIREFOX_ACCEPT_TERMS: ${FIREFOX_ACCEPT_TERMS:-0}
+    image: jumpseat
+    container_name: jumpseat
+    # Firefox tabs crash with Docker's default 64 MB /dev/shm
+    shm_size: 1g
+    ports:
+      - "127.0.0.1:6080:6080"
+    environment:
+      VNC_PASSWORD: ${VNC_PASSWORD:-}
+      VNC_RESOLUTION: ${VNC_RESOLUTION:-1920x1080}
+      KEYBOARD_LAYOUT: ${KEYBOARD_LAYOUT:-no}
+    volumes:
+      - home:/home/ubuntu
+
+volumes:
+  home:

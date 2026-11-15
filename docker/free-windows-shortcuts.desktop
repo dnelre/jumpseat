@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=Free Windows shortcuts for RDP
+Exec=/usr/local/bin/free-windows-shortcuts
+NoDisplay=true

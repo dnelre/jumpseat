@@ -1,0 +1,28 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The job only reads the repository
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Pinned to a commit, because a tag can be moved; Dependabot keeps it current
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check jumpseat.py
+        run: python3 -m py_compile scripts/jumpseat.py && python3 scripts/jumpseat.py --help
+      - name: Build image
+        run: docker compose -f docker/compose.yaml build

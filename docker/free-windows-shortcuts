@@ -1,0 +1,20 @@
+#!/bin/sh
+# Runs when the XFCE session starts (see free-windows-shortcuts.desktop).
+# Removes XFCE's own keyboard shortcuts that Windows also uses, so that Win+R, Alt+F4, Alt+Tab and so on reach the
+# RDP session. Otherwise Win+R opens XFCE's Application Finder and Alt+F4 closes the whole Remmina window.
+
+# On a new home folder XFCE first copies its default shortcuts; wait for that, or there is nothing to remove yet
+for _ in $(seq 40); do
+  xfconf-query -c xfce4-keyboard-shortcuts -p /commands/custom/override >/dev/null 2>&1 && break
+  sleep 0.5
+done
+
+for key in '<Super>r' '<Super>e' '<Super>p' '<Alt>F1' '<Alt>F2' '<Alt>F3' '<Primary>Escape' \
+           '<Primary><Alt>Delete' '<Primary><Alt>l' '<Primary><Alt>f' '<Alt><Super>s'; do
+  xfconf-query -c xfce4-keyboard-shortcuts -p "/commands/custom/${key}" -r -R 2>/dev/null
+done
+for key in '<Alt>F4' '<Alt>Tab' '<Shift><Alt>Tab' '<Alt>space' '<Super>Tab' '<Primary><Alt>d' \
+           '<Alt>F6' '<Alt>F7' '<Alt>F8' '<Alt>F9' '<Alt>F10' '<Alt>F11' '<Alt>F12'; do
+  xfconf-query -c xfce4-keyboard-shortcuts -p "/xfwm4/custom/${key}" -r 2>/dev/null
+done
+exit 0

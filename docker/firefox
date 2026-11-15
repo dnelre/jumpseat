@@ -1,0 +1,4 @@
+#!/bin/sh
+# Shadows /usr/bin/firefox so every launcher enables WebDriver BiDi, which jumpseat.py uses to read page text.
+# The port listens on the container's 127.0.0.1 only and is not published by compose.yaml.
+exec /usr/lib/firefox/firefox --remote-debugging-port=9222 "$@"
