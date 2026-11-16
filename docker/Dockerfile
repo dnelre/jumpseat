@@ -72,11 +72,16 @@ USER root
 # uv (Python versions and virtual environments) from its official multi-arch image
 COPY --from=ghcr.io/astral-sh/uv:0.13.8 /uv /uvx /usr/local/bin/
 
-# GitHub CLI from GitHub's APT repo; VS Code as Microsoft's .deb (updated by rebuilding the image). Its postinst would
-# add Microsoft's APT repo with a second key path, which breaks apt; the debconf answer stops that.
+# GitHub CLI from GitHub's APT repo; Node.js LTS with npm from NodeSource (Ubuntu's is Node 18, without npm);
+# VS Code as Microsoft's .deb (updated by rebuilding the image). Its postinst would add Microsoft's APT repo with a
+# second key path, which breaks apt; the debconf answer stops that.
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /etc/apt/keyrings/githubcli.gpg \
  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli.gpg] https://cli.github.com/packages stable main" \
       > /etc/apt/sources.list.d/github-cli.list \
+ && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key -o /etc/apt/keyrings/nodesource.asc \
+ && echo "deb [signed-by=/etc/apt/keyrings/nodesource.asc] https://deb.nodesource.com/node_26.x nodistro main" \
+      > /etc/apt/sources.list.d/nodesource.list \
+ && printf 'Package: nodejs\nPin: origin deb.nodesource.com\nPin-Priority: 1000\n' > /etc/apt/preferences.d/nodesource \
  && case "$(dpkg --print-architecture)" in \
       amd64) code_arch=x64 ;; arm64) code_arch=arm64 ;; *) echo "No VS Code build for this architecture" >&2; exit 1 ;; \
     esac \
@@ -84,8 +89,17 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o 
  && echo "code code/add-microsoft-repo boolean false" | debconf-set-selections \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
-      /tmp/code.deb gh git git-lfs python3 python3-venv python3-pip make jq ripgrep unzip zip file \
+      /tmp/code.deb gh git git-lfs python3 python3-venv python3-pip python3-dev python-is-python3 \
+      nodejs build-essential pkg-config make jq ripgrep unzip zip file \
+ && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/* /tmp/code.deb
+
+# VS Code (Electron) starts a sandbox that needs user namespaces, which Docker's default seccomp profile blocks, so
+# it crashes at start without a window. The container is the boundary here: start it without that sandbox, from the
+# menu and desktop icon and from the terminal.
+RUN sed -i 's|^Exec=/usr/share/code/code|& --no-sandbox|' /usr/share/applications/com.microsoft.VSCode*.desktop \
+ && printf '#!/bin/sh\nexec /usr/share/code/bin/code --no-sandbox "$@"\n' > /usr/local/bin/code \
+ && chmod 755 /usr/local/bin/code
 
 # Run by start.sh on every start: install Claude Code into the home volume (it then updates itself), point git at gh
 COPY --chmod=755 start.d/ /etc/jumpseat/start.d/

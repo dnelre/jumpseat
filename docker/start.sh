@@ -35,7 +35,7 @@ done
 setxkbmap "${KEYBOARD_LAYOUT}"
 
 # Desktop icons for the apps this image has (VS Code and the terminal only in the dev target)
-for app in org.remmina.Remmina:remmina firefox:firefox code:code xfce4-terminal:terminal; do
+for app in org.remmina.Remmina:remmina firefox:firefox com.microsoft.VSCode:code xfce4-terminal:terminal; do
   src=/usr/share/applications/${app%%:*}.desktop
   dst=~/Desktop/${app#*:}.desktop
   if [[ -e "${src}" && ! -e "${dst}" ]]; then
