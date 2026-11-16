@@ -127,6 +127,8 @@ and `jumpseat.py ps` runs PowerShell with those rights.
   most 8 characters and appears in the container log and in the address you open, so do not publish the port.
 - Anyone who can run Docker commands on the host controls the desktop.
 - Firefox's remote debugging port listens only inside the container and is not published.
+- GTK's image loaders (glycin) still run in their bubblewrap sandbox, but see the container's `/dev` instead of a fresh
+  one, because a container may not mount a new one (`docker/bwrap`).
 - Remmina stores saved passwords unencrypted in the home volume. Screenshots go to `$TMPDIR/jumpseat-shots`, can
   show sensitive data and are deleted after 30 minutes.
 
