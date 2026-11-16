@@ -82,9 +82,11 @@ For local settings such as a DNS search domain, copy
 
 ## Dev desktop
 
-The `dev` target adds VS Code, a terminal icon, git, git-lfs, the GitHub CLI, Python with [uv](https://docs.astral.sh/uv/), and
-Claude Code (installed into the home volume on the first start; it updates itself). VS Code keeps its secrets in its own
-store (`password-store: basic`), because the container has no keyring.
+The `dev` target adds VS Code, a terminal icon, git, git-lfs, the GitHub CLI, Python with [uv](https://docs.astral.sh/uv/),
+Node.js LTS with npm, a C/C++ toolchain (`build-essential`), and Claude Code (installed into the home volume on the
+first start; it updates itself). VS Code keeps its secrets in its own store (`password-store: basic`), because the
+container has no keyring, and runs with `--no-sandbox`, because Chromium's sandbox needs user namespaces that Docker
+blocks by default (the container is the boundary).
 
 ```sh
 JUMPSEAT_TARGET=dev python3 scripts/jumpseat.py up

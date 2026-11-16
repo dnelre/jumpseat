@@ -39,7 +39,9 @@ jobs:
       - name: Build image (dev)
         run: JUMPSEAT_TARGET=dev docker compose -f docker/compose.yaml build
       - name: Check the dev tools
-        run: docker run --rm --entrypoint sh jumpseat -c 'code --version && gh --version && uv --version && git --version'
+        run: >-
+          docker run --rm --entrypoint sh jumpseat -c 'code --version && gh --version && uv --version && git --version
+          && python --version && node --version && npm --version && gcc --version'
       - name: Start the dev desktop
         run: scripts/smoke-test.sh jumpseat
 
