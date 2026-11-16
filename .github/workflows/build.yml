@@ -122,7 +122,7 @@ jobs:
           done
 
   # Old versions on ghcr.io: keeps every tag except fixed tags beyond the 3 newest per image, and everything the kept
-  # tags point to (see scripts/ghcr-cleanup.sh). Dry run while CLEANUP_DELETE is "false": the log lists what would go.
+  # tags point to (see scripts/ghcr-cleanup.sh). Set CLEANUP_DELETE to "false" for a dry run that only lists what would go.
   cleanup:
     needs: manifest
     runs-on: ubuntu-24.04
@@ -131,7 +131,7 @@ jobs:
       contents: read
       packages: write
     env:
-      CLEANUP_DELETE: "false"
+      CLEANUP_DELETE: "true"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
