@@ -1,7 +1,8 @@
 # Two targets:
 #   desktop (default)  XFCE, Remmina, Firefox and network tools
-#   dev                desktop + VS Code, git, GitHub CLI, Python/uv and Claude Code, for coding in the browser
-FROM ubuntu:25.10 AS desktop
+#   dev                desktop + VS Code, git, GitHub CLI, Python/uv, Claude Code and a Playwright browser for the agent,
+#                      for coding in the browser
+FROM ubuntu:26.04 AS desktop
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -38,6 +39,8 @@ RUN install -d -m 0755 /etc/apt/keyrings \
 
 COPY --chmod=755 start.sh /usr/local/bin/start.sh
 COPY --chmod=755 firefox /usr/local/bin/firefox
+# GTK's image loader (glycin) sandboxes itself with bwrap, whose new /dev mount a container may not make; see the file
+COPY --chmod=755 bwrap /usr/local/bin/bwrap
 # No welcome tab or other first-run pages: the agent and the user start at the page they asked for
 COPY firefox-policies.json /etc/firefox/policies/policies.json
 # Firefox's terms dialog blocks the agent on a new home volume. Whoever builds the image may accept the terms for
