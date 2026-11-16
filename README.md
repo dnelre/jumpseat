@@ -80,6 +80,12 @@ For local settings such as a DNS search domain, copy
 [docker/compose.override.example.yaml](docker/compose.override.example.yaml) to `docker/compose.override.yaml` (git-ignored).
 `jumpseat.py up` loads it automatically.
 
+### Dark mode
+
+The desktop starts light, because the agent's OCR reads dark-on-light text best. For dark mode, choose
+**Greybird-dark** in Settings → Appearance → Style and in Settings → Window Manager → Style. The choice is kept in
+the home volume. Firefox follows it; VS Code has its own color theme, and an RDP session shows the remote desktop's look.
+
 ## Dev desktop
 
 The `dev` target adds VS Code, a terminal icon, git, git-lfs, the GitHub CLI, Python with [uv](https://docs.astral.sh/uv/),
