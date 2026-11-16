@@ -41,7 +41,7 @@ jobs:
       - name: Check the dev tools
         run: >-
           docker run --rm --entrypoint sh jumpseat -c 'code --version && gh --version && uv --version && git --version
-          && python --version && node --version && npm --version && gcc --version'
+          && python --version && node --version && npm --version && gcc --version && playwright-mcp --version'
       - name: Start the dev desktop
         run: scripts/smoke-test.sh jumpseat
 

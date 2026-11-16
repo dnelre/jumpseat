@@ -59,6 +59,23 @@ if inside sh -c 'command -v code' >/dev/null 2>&1; then
   wait_for 60 "VS Code window is on screen" xdotool search --onlyvisible --class Code
 fi
 
+# Dev target: the Playwright MCP server's own Playwright must start its Chromium in a window on this display, the way
+# the agent uses it (a server that wants another Chromium build than the image has fails here)
+if inside sh -c 'command -v playwright-mcp' >/dev/null 2>&1; then
+  if inside sh -c 'cd "$(npm root -g)/@playwright/mcp" && node -e "
+      require(\"playwright\").chromium.launch({ headless: false }).then(async (browser) => {
+        const page = await browser.newPage();
+        await page.goto(\"data:text/html,<title>jumpseat-ok</title>\");
+        console.log(await page.title());
+        await browser.close();
+      })"' | grep -qx jumpseat-ok; then
+    echo "ok: Playwright opens Chromium on the desktop"
+  else
+    echo "FAILED: Playwright opens Chromium on the desktop"
+    exit 1
+  fi
+fi
+
 # A desktop that crashes does so within seconds of showing up, and takes the container with it
 sleep 10
 wait_for 1 "desktop is still up after 10 s" xdotool search --onlyvisible --class xfce4-panel

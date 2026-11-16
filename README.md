@@ -92,6 +92,23 @@ blocks by default (the container is the boundary).
 JUMPSEAT_TARGET=dev python3 scripts/jumpseat.py up
 ```
 
+### Browsing together with the agent
+
+The dev target also has the [Playwright MCP server](https://github.com/microsoft/playwright-mcp) with its own
+Chromium, and registers it with Claude Code on start. Ask Claude Code in the desktop (VS Code or terminal) to open a
+page: a Chromium window appears on the desktop, you watch it fill in forms and click, and you can take over in the same
+window at any time (log in yourself, scroll to something) and ask the agent to look again. This is separate from
+Firefox: the agent only sees the Chromium window it opened.
+
+- Logins and cookies are kept in `~/.cache/playwright-mcp/profile` in the home volume. Closing the window loses only
+  the open pages; the agent opens a new one on its next browser step.
+- Screenshots and page snapshots go to `/tmp/playwright-mcp`, not into the open project.
+- One browser at a time: while one agent session has the window open, another gets "Browser is already in use".
+  Close the window (or that session's browser) first.
+- The server and Chromium are pinned in the image (`PLAYWRIGHT_MCP_VERSION`) and updated by rebuilding. An existing
+  `playwright` entry in `~/.claude.json` is never overwritten; remove it with `claude mcp remove --scope user playwright`
+  to get the image's default back on the next start.
+
 Pushes to `main` publish both targets for amd64 and arm64 to GitHub Packages: `ghcr.io/dnelre/jumpseat:latest`
 and `ghcr.io/dnelre/jumpseat:dev`. To serve the dev desktop over the internet, put it behind a login proxy
 (e.g. Caddy + Authelia), set the VNC password with `VNC_PASSWORD_FILE` as a second lock, and never publish port 6080 directly.

@@ -1,6 +1,7 @@
 # Two targets:
 #   desktop (default)  XFCE, Remmina, Firefox and network tools
-#   dev                desktop + VS Code, git, GitHub CLI, Python/uv and Claude Code, for coding in the browser
+#   dev                desktop + VS Code, git, GitHub CLI, Python/uv, Claude Code and a Playwright browser for the agent,
+#                      for coding in the browser
 FROM ubuntu:24.04 AS desktop
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -101,7 +102,19 @@ RUN sed -i 's|^Exec=/usr/share/code/code|& --no-sandbox|' /usr/share/application
  && printf '#!/bin/sh\nexec /usr/share/code/bin/code --no-sandbox "$@"\n' > /usr/local/bin/code \
  && chmod 755 /usr/local/bin/code
 
-# Run by start.sh on every start: install Claude Code into the home volume (it then updates itself), point git at gh
+# Playwright MCP server: lets an agent in the desktop (Claude Code in VS Code or the terminal) open a Chromium window on
+# this screen, which the user watches and uses over noVNC. Pinned together with the Chromium build its Playwright
+# expects (a newer server wants a newer build); update by raising the version and rebuilding. The browser lives in /opt,
+# outside the home volume, so it always matches the image. Only the full Chromium: the window must be visible, so the
+# separate headless build (about 280 MB) is left out.
+ARG PLAYWRIGHT_MCP_VERSION=0.0.85
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+RUN npm install -g "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}" \
+ && "$(npm root -g)/@playwright/mcp/node_modules/.bin/playwright" install --with-deps --no-shell chromium \
+ && rm -rf /var/lib/apt/lists/* /root/.npm
+
+# Run by start.sh on every start: install Claude Code into the home volume (it then updates itself), register the
+# Playwright MCP server with it, point git at gh
 COPY --chmod=755 start.d/ /etc/jumpseat/start.d/
 
 USER ubuntu
