@@ -5,6 +5,8 @@ services:
   jumpseat:
     build:
       context: .
+      # "desktop" (default) or "dev" (adds VS Code, git, gh, Python/uv and Claude Code)
+      target: ${JUMPSEAT_TARGET:-desktop}
       args:
         FIREFOX_ACCEPT_TERMS: ${FIREFOX_ACCEPT_TERMS:-0}
     image: jumpseat

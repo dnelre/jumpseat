@@ -1,4 +1,7 @@
-FROM ubuntu:24.04
+# Two targets:
+#   desktop (default)  XFCE, Remmina, Firefox and network tools
+#   dev                desktop + VS Code, git, GitHub CLI, Python/uv and Claude Code, for coding in the browser
+FROM ubuntu:24.04 AS desktop
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -59,3 +62,34 @@ ENV VNC_RESOLUTION=1920x1080 \
 EXPOSE 6080
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/start.sh"]
+
+# ---------------------------------------------------------------------------------------------------------------------
+FROM desktop AS dev
+
+ARG DEBIAN_FRONTEND=noninteractive
+USER root
+
+# uv (Python versions and virtual environments) from its official multi-arch image
+COPY --from=ghcr.io/astral-sh/uv:0.13.8 /uv /uvx /usr/local/bin/
+
+# GitHub CLI from GitHub's APT repo; VS Code as Microsoft's .deb (updated by rebuilding the image). Its postinst would
+# add Microsoft's APT repo with a second key path, which breaks apt; the debconf answer stops that.
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /etc/apt/keyrings/githubcli.gpg \
+ && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli.gpg] https://cli.github.com/packages stable main" \
+      > /etc/apt/sources.list.d/github-cli.list \
+ && case "$(dpkg --print-architecture)" in \
+      amd64) code_arch=x64 ;; arm64) code_arch=arm64 ;; *) echo "No VS Code build for this architecture" >&2; exit 1 ;; \
+    esac \
+ && curl -fsSL "https://update.code.visualstudio.com/latest/linux-deb-${code_arch}/stable" -o /tmp/code.deb \
+ && echo "code code/add-microsoft-repo boolean false" | debconf-set-selections \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends \
+      /tmp/code.deb gh git git-lfs python3 python3-venv python3-pip make jq ripgrep unzip zip file \
+ && rm -rf /var/lib/apt/lists/* /tmp/code.deb
+
+# Run by start.sh on every start: install Claude Code into the home volume (it then updates itself), point git at gh
+COPY --chmod=755 start.d/ /etc/jumpseat/start.d/
+
+USER ubuntu
+# Claude Code lives in ~/.local/bin; put it on PATH for the whole desktop, not only for login shells
+ENV PATH=/home/ubuntu/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
