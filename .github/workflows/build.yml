@@ -15,7 +15,8 @@ concurrency:
 
 jobs:
   # On both architectures, so arm64 packages (Firefox, VS Code) are tested before anything is published
-  build:
+  build-arch:
+    name: build (${{ matrix.runner }})
     strategy:
       matrix:
         runner: [ubuntu-24.04, ubuntu-24.04-arm]
@@ -41,6 +42,13 @@ jobs:
         run: docker run --rm --entrypoint sh jumpseat -c 'code --version && gh --version && uv --version && git --version'
       - name: Start the dev desktop
         run: scripts/smoke-test.sh jumpseat
+
+  # The check that branch protection requires: green only when every architecture is
+  build:
+    needs: build-arch
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "All architectures built and passed the smoke test"
 
   # Images for amd64 and arm64 (e.g. a Raspberry Pi) to ghcr.io, only from main:
   #   ghcr.io/<owner>/jumpseat:latest  desktop target
