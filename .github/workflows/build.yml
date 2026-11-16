@@ -14,8 +14,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # On both architectures, so arm64 packages (Firefox, VS Code) are tested before anything is published
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
     steps:
       # Pinned to a commit, because a tag can be moved; Dependabot keeps it current
@@ -38,21 +42,28 @@ jobs:
       - name: Start the dev desktop
         run: scripts/smoke-test.sh jumpseat
 
-  # Multi-arch images (amd64 + arm64, e.g. a Raspberry Pi) to ghcr.io, only from main:
+  # Images for amd64 and arm64 (e.g. a Raspberry Pi) to ghcr.io, only from main:
   #   ghcr.io/<owner>/jumpseat:latest  desktop target
   #   ghcr.io/<owner>/jumpseat:dev     dev target
+  # Each architecture builds natively on its own runner and pushes <tag>-<arch>; the manifest job then joins them.
+  # Plain docker commands: only GitHub's own actions are allowed in this repository.
   publish:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build
-    runs-on: ubuntu-latest
-    # arm64 is built under QEMU emulation, which is slow
-    timeout-minutes: 120
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: write
     strategy:
       matrix:
+        target: [desktop, dev]
+        arch: [amd64, arm64]
         include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
           - target: desktop
             tag: latest
           - target: dev
@@ -61,11 +72,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Plain docker commands: only GitHub's own actions are allowed in this repository
-      - name: Set up arm64 emulation and buildx
-        run: |
-          docker run --rm --privileged tonistiigi/binfmt:qemu-v10.2.3 --install arm64
-          docker buildx create --use --name multiarch
       - name: Log in to ghcr.io
         run: echo "${GH_TOKEN}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
         env:
@@ -73,10 +79,31 @@ jobs:
       - name: Build and push
         run: |
           image=ghcr.io/${{ github.repository_owner }}/jumpseat
+          # The docker-container driver can keep the build cache in the registry
+          docker buildx create --use --name builder
           docker buildx build docker \
             --target "${{ matrix.target }}" \
-            --platform linux/amd64,linux/arm64 \
-            --cache-from "type=registry,ref=${image}:cache-${{ matrix.target }}" \
-            --cache-to "type=registry,ref=${image}:cache-${{ matrix.target }},mode=max" \
-            --tag "${image}:${{ matrix.tag }}" \
+            --platform "linux/${{ matrix.arch }}" \
+            --cache-from "type=registry,ref=${image}:cache-${{ matrix.target }}-${{ matrix.arch }}" \
+            --cache-to "type=registry,ref=${image}:cache-${{ matrix.target }}-${{ matrix.arch }},mode=max" \
+            --tag "${image}:${{ matrix.tag }}-${{ matrix.arch }}" \
             --push
+
+  manifest:
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Log in to ghcr.io
+        run: echo "${GH_TOKEN}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Join the architectures into one tag each
+        run: |
+          image=ghcr.io/${{ github.repository_owner }}/jumpseat
+          for tag in latest dev; do
+            docker buildx imagetools create --tag "${image}:${tag}" "${image}:${tag}-amd64" "${image}:${tag}-arm64"
+          done
