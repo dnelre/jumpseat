@@ -67,6 +67,8 @@ screenshot and print its path and the region that changed, so an agent needs one
 | Variable | Default | Meaning |
 |---|---|---|
 | `VNC_PASSWORD` | random | Only the first 8 characters are used |
+| `VNC_PASSWORD_FILE` | | Read the password from this file instead (e.g. a mounted Docker secret) |
+| `JUMPSEAT_TARGET` | `desktop` | Image target for `jumpseat.py up`: `desktop`, or `dev` for coding in the browser (see [Dev desktop](#dev-desktop)) |
 | `VNC_RESOLUTION` | `1920x1080` | Initial size; noVNC resizes it to the browser window |
 | `KEYBOARD_LAYOUT` | `no` | X keymap; must match the RDP servers' layout (e.g. `us`, `de`) |
 | `FIREFOX_ACCEPT_TERMS` | `0` | `1` accepts Firefox's Terms of Use when the image is built, see [Firefox terms](#firefox-terms) |
@@ -77,6 +79,20 @@ Example: `KEYBOARD_LAYOUT=us python3 scripts/jumpseat.py up`.
 For local settings such as a DNS search domain, copy
 [docker/compose.override.example.yaml](docker/compose.override.example.yaml) to `docker/compose.override.yaml` (git-ignored).
 `jumpseat.py up` loads it automatically.
+
+## Dev desktop
+
+The `dev` target adds VS Code, a terminal icon, git, git-lfs, the GitHub CLI, Python with [uv](https://docs.astral.sh/uv/), and
+Claude Code (installed into the home volume on the first start; it updates itself). VS Code keeps its secrets in its own
+store (`password-store: basic`), because the container has no keyring.
+
+```sh
+JUMPSEAT_TARGET=dev python3 scripts/jumpseat.py up
+```
+
+Pushes to `main` publish both targets for amd64 and arm64 to GitHub Packages: `ghcr.io/dnelre/jumpseat:latest`
+and `ghcr.io/dnelre/jumpseat:dev`. To serve the dev desktop over the internet, put it behind a login proxy
+(e.g. Caddy + Authelia), set the VNC password with `VNC_PASSWORD_FILE` as a second lock, and never publish port 6080 directly.
 
 ## Security
 
