@@ -1,7 +1,7 @@
 # Two targets:
 #   desktop (default)  XFCE, Remmina, Firefox and network tools
 #   dev                desktop + VS Code, git, GitHub CLI, Python/uv and Claude Code, for coding in the browser
-FROM ubuntu:24.04 AS desktop
+FROM ubuntu:25.10 AS desktop
 
 ARG DEBIAN_FRONTEND=noninteractive
 
