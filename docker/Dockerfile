@@ -6,9 +6,12 @@ FROM ubuntu:26.04 AS desktop
 
 ARG DEBIAN_FRONTEND=noninteractive
 
+# greybird-gtk-theme and gnome-themes-extra add dark themes (Greybird-dark, Adwaita-dark) to choose in Settings; the
+# default stays light, which the agent's OCR reads best
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       xfce4 xfce4-terminal dbus-x11 x11-xkb-utils adwaita-icon-theme fonts-dejavu-core \
+      greybird-gtk-theme gnome-themes-extra \
       tigervnc-standalone-server tigervnc-tools \
       novnc websockify \
       remmina remmina-plugin-rdp remmina-plugin-vnc freerdp3-x11 \
