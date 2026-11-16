@@ -30,7 +30,7 @@ jobs:
       - name: Check jumpseat.py
         run: python3 -m py_compile scripts/jumpseat.py && python3 scripts/jumpseat.py --help
       - name: Check start scripts
-        run: bash -n docker/start.sh && sh -n docker/start.d/*.sh
+        run: bash -n docker/start.sh && sh -n docker/start.d/*.sh docker/bwrap && bash -n scripts/ghcr-cleanup.sh
       - name: Build image
         run: docker compose -f docker/compose.yaml build
       # A green build does not mean the desktop works: start it and look for XFCE, Remmina and noVNC
@@ -111,9 +111,43 @@ jobs:
         run: echo "${GH_TOKEN}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Also a fixed tag per publish (e.g. dev-20261116-e51627a): something to roll back to, and what the cleanup keeps
       - name: Join the architectures into one tag each
         run: |
           image=ghcr.io/${{ github.repository_owner }}/jumpseat
+          stamp="$(date -u +%Y%m%d)-${GITHUB_SHA::7}"
           for tag in latest dev; do
-            docker buildx imagetools create --tag "${image}:${tag}" "${image}:${tag}-amd64" "${image}:${tag}-arm64"
+            docker buildx imagetools create --tag "${image}:${tag}" --tag "${image}:${tag}-${stamp}" \
+              "${image}:${tag}-amd64" "${image}:${tag}-arm64"
           done
+
+  # Old versions on ghcr.io: keeps every tag except fixed tags beyond the 3 newest per image, and everything the kept
+  # tags point to (see scripts/ghcr-cleanup.sh). Dry run while CLEANUP_DELETE is "false": the log lists what would go.
+  cleanup:
+    needs: manifest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    env:
+      CLEANUP_DELETE: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Log in to ghcr.io
+        run: echo "${GH_TOKEN}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Remove old image versions
+        run: |
+          if [ "${CLEANUP_DELETE}" = true ]; then
+            scripts/ghcr-cleanup.sh --delete
+          else
+            scripts/ghcr-cleanup.sh
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          KEEP: 3

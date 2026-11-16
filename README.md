@@ -116,7 +116,8 @@ Firefox: the agent only sees the Chromium window it opened.
   to get the image's default back on the next start.
 
 Pushes to `main` publish both targets for amd64 and arm64 to GitHub Packages: `ghcr.io/dnelre/jumpseat:latest`
-and `ghcr.io/dnelre/jumpseat:dev`. To serve the dev desktop over the internet, put it behind a login proxy
+and `ghcr.io/dnelre/jumpseat:dev`. Each publish also gets a fixed tag such as `dev-20261116-e51627a` (date and commit)
+to roll back to; the 3 newest per image are kept and older versions are removed. To serve the dev desktop over the internet, put it behind a login proxy
 (e.g. Caddy + Authelia), set the VNC password with `VNC_PASSWORD_FILE` as a second lock, and never publish port 6080 directly.
 
 ## Security
