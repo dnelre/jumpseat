@@ -76,6 +76,8 @@ See [setup and limitations](docs/powershell.md). GUI, clipboard copying and OCR 
 | Variable | Default | Meaning |
 |---|---|---|
 | `VNC_PASSWORD` | random | Only the first 8 characters are used |
+| `VNC_PASSWORD_FILE` | | Read the password from this file instead (e.g. a mounted Docker secret) |
+| `JUMPSEAT_TARGET` | `desktop` | Image target for `jumpseat.py up`: `desktop`, or `dev` for coding in the browser (see [Dev desktop](#dev-desktop)) |
 | `VNC_RESOLUTION` | `1920x1080` | Initial size; noVNC resizes it to the browser window |
 | `KEYBOARD_LAYOUT` | `no` | X keymap; must match the RDP servers' layout (e.g. `us`, `de`) |
 | `FIREFOX_ACCEPT_TERMS` | `0` | `1` accepts Firefox's Terms of Use when the image is built, see [Firefox terms](#firefox-terms) |
@@ -88,6 +90,46 @@ For a custom environment, copy [docker/compose.override.example.yaml](docker/com
 The override can also set DNS servers, extra hosts or mounts using Docker Compose syntax; no organization-specific
 settings are built in. `jumpseat.py up` loads it automatically. Applying a changed override may recreate the container
 and disconnect active RDP sessions.
+
+### Dark mode
+
+The desktop starts light, because the agent's OCR reads dark-on-light text best. For dark mode, choose
+**Greybird-dark** in Settings → Appearance → Style and in Settings → Window Manager → Style. The choice is kept in
+the home volume. Firefox follows it; VS Code has its own color theme, and an RDP session shows the remote desktop's look.
+
+## Dev desktop
+
+The `dev` target adds VS Code, a terminal icon, git, git-lfs, the GitHub CLI, Python with [uv](https://docs.astral.sh/uv/),
+Node.js LTS with npm, a C/C++ toolchain (`build-essential`), and Claude Code (installed into the home volume on the
+first start; it updates itself). VS Code keeps its secrets in its own store (`password-store: basic`), because the
+container has no keyring, and runs with `--no-sandbox`, because Chromium's sandbox needs user namespaces that Docker
+blocks by default (the container is the boundary).
+
+```sh
+JUMPSEAT_TARGET=dev python3 scripts/jumpseat.py up
+```
+
+### Browsing together with the agent
+
+The dev target also has the [Playwright MCP server](https://github.com/microsoft/playwright-mcp) with its own
+Chromium, and registers it with Claude Code on start. Ask Claude Code in the desktop (VS Code or terminal) to open a
+page: a Chromium window appears on the desktop, you watch it fill in forms and click, and you can take over in the same
+window at any time (log in yourself, scroll to something) and ask the agent to look again. This is separate from
+Firefox: the agent only sees the Chromium window it opened.
+
+- Logins and cookies are kept in `~/.cache/playwright-mcp/profile` in the home volume. Closing the window loses only
+  the open pages; the agent opens a new one on its next browser step.
+- Screenshots and page snapshots go to `/tmp/playwright-mcp`, not into the open project.
+- One browser at a time: while one agent session has the window open, another gets "Browser is already in use".
+  Close the window (or that session's browser) first.
+- The server and Chromium are pinned in the image (`PLAYWRIGHT_MCP_VERSION`) and updated by rebuilding. An existing
+  `playwright` entry in `~/.claude.json` is never overwritten; remove it with `claude mcp remove --scope user playwright`
+  to get the image's default back on the next start.
+
+Pushes to `main` publish both targets for amd64 and arm64 to GitHub Packages: `ghcr.io/dnelre/jumpseat:latest`
+and `ghcr.io/dnelre/jumpseat:dev`. Each publish also gets a fixed tag such as `dev-20261116-e51627a` (date and commit)
+to roll back to; the 3 newest per image are kept and older versions are removed. To serve the dev desktop over the internet, put it behind a login proxy
+(e.g. Caddy + Authelia), set the VNC password with `VNC_PASSWORD_FILE` as a second lock, and never publish port 6080 directly.
 
 ## Security
 
@@ -104,6 +146,8 @@ Anyone who can write to its shared folder can submit commands. Keep it enabled o
   most 8 characters and appears in the container log and in the address you open, so do not publish the port.
 - Anyone who can run Docker commands on the host controls the desktop.
 - Firefox's remote debugging port listens only inside the container and is not published.
+- GTK's image loaders (glycin) still run in their bubblewrap sandbox, but see the container's `/dev` instead of a fresh
+  one, because a container may not mount a new one (`docker/bwrap`).
 - Remmina stores saved passwords unencrypted in the home volume. Screenshots go to `$TMPDIR/jumpseat-shots`, can
   show sensitive data and are deleted after 30 minutes.
 

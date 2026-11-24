@@ -1,0 +1,21 @@
+#!/bin/sh
+# Shadows /usr/bin/bwrap for glycin, the image loader behind GTK's gdk-pixbuf since Ubuntu 26.04. glycin runs every
+# loader in a bwrap sandbox with "--dev /dev", which mounts a new devpts. An unprivileged container may not do that
+# ("Can't mount devpts on /newroot/dev/pts: Permission denied"), so every icon load fails and XFCE aborts at start.
+# Bind the container's own /dev instead; the rest of the sandbox (namespaces, seccomp, read-only /usr) stays.
+n=$#
+i=0
+while [ "$i" -lt "$n" ]; do
+  arg=$1
+  shift
+  i=$((i + 1))
+  if [ "$arg" = "--dev" ] && [ "$i" -lt "$n" ]; then
+    dest=$1
+    shift
+    i=$((i + 1))
+    set -- "$@" --dev-bind "$dest" "$dest"
+  else
+    set -- "$@" "$arg"
+  fi
+done
+exec /usr/bin/bwrap "$@"
