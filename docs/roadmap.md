@@ -31,6 +31,10 @@ Not measured yet: GitHub Copilot, and an agent that looks at the desktop through
 
 ## Open
 
+**PowerShell:** the Defender-triggering starter has been replaced by an opt-in [file runner](./powershell.md).
+Validate Windows PowerShell 5.1, RDP sharing/locking, timeout process-tree cleanup and Defender/SOC telemetry in a lab
+before production use; see [defender-ps-incident.md](./defender-ps-incident.md).
+
 **Agent loop**
 - After an action, return only the changed region as the image when it is small, and offer text instead of an image.
 - Shorten `SKILL.md`: a short core, with tips and configuration in a reference file read on demand.

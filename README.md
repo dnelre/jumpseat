@@ -53,7 +53,8 @@ never types passwords and asks before anything that changes state.
 | `jumpseat.py type "text"`, `jumpseat.py key ctrl+a Return`, `jumpseat.py paste "text"` | Keyboard |
 | `jumpseat.py do "click X Y" "paste text" "key Return"` | Several mouse and keyboard steps in one call |
 | `jumpseat.py copy [--all]` | Press ctrl+c in the focused window and print what was copied |
-| `jumpseat.py ps "COMMAND"` | Run PowerShell on the Windows server of the open RDP session and print the output |
+| `jumpseat.py ps-setup` | Create the opt-in shared-folder PowerShell runner files (does not start it) |
+| `jumpseat.py ps --server NAME "COMMAND"` | Run a script through the manually enabled visible runner and read its log |
 | `jumpseat.py clipboard ["text"]` | Read or set the desktop clipboard (shared with RDP) |
 | `jumpseat.py page [URL]`, `js "EXPR"`, `teams` | Open a page in Firefox and read its text via WebDriver BiDi |
 | `jumpseat.py controls`, `webclick "NAME"`, `webfill "FIELD" "TEXT"` | List, click and fill the controls of the page by name, without coordinates |
@@ -61,6 +62,14 @@ never types passwords and asks before anything that changes state.
 Coordinates are pixels in the last screenshot, also when it is cropped or scaled; `jumpseat.py` converts them to screen pixels
 (`--screen` takes raw screen pixels instead). Mouse and keyboard commands wait until the screen stops changing, then save a new
 screenshot and print its path and the region that changed, so an agent needs one call per step instead of two (`--no-shot` skips this).
+
+### PowerShell logs instead of clipboard execution
+
+The old hidden clipboard launcher triggered Defender and has been removed. The replacement is opt-in:
+share a dedicated `Jumpseat` folder from the Linux/noVNC Desktop over RDP, manually start a visible runner in Windows,
+and read scripts and output logs from that folder. No Defender exclusions or execution-policy bypasses are used.
+**SOC approval and Defender lab validation are still required; zero alerts cannot be guaranteed.**
+See [setup and limitations](docs/powershell.md). GUI, clipboard copying and OCR remain available without a runner.
 
 ## Configuration
 
@@ -74,15 +83,18 @@ screenshot and print its path and the region that changed, so an agent needs one
 
 Example: `KEYBOARD_LAYOUT=us python3 scripts/jumpseat.py up`.
 
-For local settings such as a DNS search domain, copy
-[docker/compose.override.example.yaml](docker/compose.override.example.yaml) to `docker/compose.override.yaml` (git-ignored).
-`jumpseat.py up` loads it automatically.
+For a custom environment, copy [docker/compose.override.example.yaml](docker/compose.override.example.yaml) to
+`docker/compose.override.yaml` (git-ignored) and replace the example values with your environment's settings.
+The override can also set DNS servers, extra hosts or mounts using Docker Compose syntax; no organization-specific
+settings are built in. `jumpseat.py up` loads it automatically. Applying a changed override may recreate the container
+and disconnect active RDP sessions.
 
 ## Security
 
 **Know what you are handing over.** The agent gets the mouse, keyboard and clipboard of this desktop, and with them
 everything the desktop is logged in to. In an RDP session it acts with the rights of the account you logged in with,
-and `jumpseat.py ps` runs PowerShell with those rights.
+and an enabled `jumpseat.py ps` runner executes script files with those rights.
+Anyone who can write to its shared folder can submit commands. Keep it enabled only while needed.
 
 - The skill tells the agent never to type passwords and to ask before anything that changes state. That is an
   instruction, not a barrier: use your agent's own approval settings for commands, and watch what it does.

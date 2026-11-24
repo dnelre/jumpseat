@@ -23,7 +23,13 @@ jobs:
         with:
           persist-credentials: false
       - name: Check jumpseat.py
-        run: python3 -m py_compile scripts/jumpseat.py && python3 scripts/jumpseat.py --help
+        run: |
+          python3 scripts/jumpseat.py --help
+          python3 -m unittest discover -s scripts -p 'test_*.py' -v
+      - name: Test PowerShell file runner
+        run: |
+          docker run --rm -v "$PWD:/workspace:ro" mcr.microsoft.com/powershell:7.4-ubuntu-22.04 \
+            pwsh -NoLogo -NoProfile -File /workspace/scripts/test_powershell.ps1
       - name: Build image
         run: docker compose -f docker/compose.yaml build
       # A green build does not mean the desktop works: start it and look for XFCE, Remmina and noVNC

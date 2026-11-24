@@ -31,7 +31,8 @@ Run with `python3` from this skill's `scripts/` folder:
 | `jumpseat.py paste "text"` | Put text on the clipboard and press ctrl+v: fast, and right for any characters and keyboard layout |
 | `jumpseat.py do "click X Y" "paste text" "key Return"` | Several of the seven commands above in one call |
 | `jumpseat.py copy [--all]` | Press ctrl+c (after ctrl+a with `--all`) and print what was copied; fails if nothing was |
-| `jumpseat.py ps "COMMAND"` | Run a PowerShell command on the Windows server of the open RDP session and print its output |
+| `jumpseat.py ps-setup` | Create files for the opt-in visible PowerShell runner; does not execute it |
+| `jumpseat.py ps --server NAME "COMMAND"` | Send a script file to the manually enabled runner and read its output log |
 | `jumpseat.py clipboard ["text"]` | Print the desktop clipboard, or set it. Remmina shares it with the RDP session. |
 | `jumpseat.py page [URL] [--here] [--max N]` | Print title, URL and visible text of Firefox's active tab (default max 30000 chars). With URL: open it in a new tab first (starts Firefox if needed) and wait until it has loaded |
 | `jumpseat.py controls [--find TEXT]` | List the links, buttons and fields of the active tab: `ref:N`, kind, name, value, address |
@@ -45,20 +46,27 @@ Run with `python3` from this skill's `scripts/` folder:
 
 In this order, use the first that fits:
 
-1. **Ask the server for text.** `jumpseat.py ps "(Get-ADPrincipalGroupMembership adm_xyz).Name"` runs PowerShell on the server
-   of the open RDP session and prints the output: one call, about 2 seconds, no screenshot before or after.
-   Any length and quoting works, and several lines too. An error comes back as `ERROR: ...` with exit code 1.
-   It uses the focused RDP window (or the only one) and prints its name as `[session: NAME]`; check that it is the server you mean.
-   **Use this whenever the user wants information** (who, which, list, is it enabled), also when they name a console such as
-   Active Directory Users and Computers. Open the console only when they want to see it themselves or change something in it,
-   and say which way you used.
-   The RDP session is the only way to the server: do not look for LDAP, WinRM, SSH or other routes around it.
-2. **Copy the text.** `jumpseat.py copy --all` returns a whole web page or text field in one call; `jumpseat.py copy` returns the selection.
+1. **Copy the text.** `jumpseat.py copy --all` returns a whole web page or text field in one call; `jumpseat.py copy` returns the selection.
    Afterwards the text stays selected until the next click in the window.
-3. **Read the screen.** `jumpseat.py text` lists what is on the screen with positions, and `click --text "..."` clicks it without
+2. **Read the screen.** `jumpseat.py text` lists what is on the screen with positions, and `click --text "..."` clicks it without
    coordinates. OCR misreads now and then (icons, tiny or selected text): when a text is not found, or found several times,
    nothing is clicked and you get a fresh screenshot and the candidates; continue with `--nth` or coordinates.
-4. **Look at the screenshot** and click coordinates, for icons and anything without text.
+3. **Look at the screenshot** and click coordinates, for icons and anything without text.
+
+### Opt-in PowerShell queries
+
+The former hidden clipboard launcher triggered Defender and has been removed. Do not recreate it using the Run dialog,
+clipboard execution, encoded commands, hidden windows or policy bypasses.
+
+Only with explicit user/SOC approval and lab validation, follow [docs/powershell.md](./docs/powershell.md):
+`ps-setup` creates a dedicated Linux Desktop folder to share over RDP. The user manually starts the visible runner
+and types `START`. Never enable it on their behalf. Then `jumpseat.py ps --server NAME "COMMAND"` writes a plain
+script file and reads its log; no clipboard is involved. Check the printed server and account: the runner is **not**
+selected by the focused Remmina tab. Commands have timeouts and do not preserve console variables.
+Scripts and logs persist; they can contain sensitive data. No guarantee of zero EDR alerts.
+
+Without an approved runner, use the GUI/copy/OCR workflow. RDP is the only route to the server:
+do not look for LDAP, WinRM, SSH or another connection around it.
 
 ### A browser inside the RDP session
 
@@ -186,9 +194,12 @@ Remmina stores saved passwords there without a keyring.
 Everything else is reset when the container is recreated, so add tools to [Dockerfile](./docker/Dockerfile), not with `apt` at runtime.
 `docker compose -f docker/compose.yaml down -v` deletes the volume.
 
-Local settings that should not be committed (DNS search domains, extra hosts, mounts) go in `docker/compose.override.yaml`,
-which `jumpseat.py up` loads automatically when it exists. Copy [docker/compose.override.example.yaml](./docker/compose.override.example.yaml) to start.
-The port is bound to `127.0.0.1` only.
+For a custom environment, local settings that should not be committed (DNS search domains, DNS servers, extra hosts,
+mounts) go in `docker/compose.override.yaml`, which `jumpseat.py up` loads automatically when it exists.
+Copy [docker/compose.override.example.yaml](./docker/compose.override.example.yaml) and replace the example values.
+No organization-specific settings are built in; ask the user for environment-specific values rather than guessing them.
+Applying a changed override may recreate the container and disconnect active RDP sessions, so ask before doing so
+if a session is open. The port is bound to `127.0.0.1` only.
 
 ## Files
 
