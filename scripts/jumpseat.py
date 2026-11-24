@@ -299,90 +299,6 @@ put(old or b"")
 sys.exit("Nothing was copied. Is the text selected and the right window focused? (Slow server: raise --wait.)")
 """
 
-# Runs inside the container: runs a PowerShell command on the Windows server of the open RDP session and prints its
-# output. The command travels on the clipboard, so its length and quoting do not matter: the Run box only gets a
-# fixed starter that executes what is on the clipboard, and the script puts its output back there behind a marker.
-PS_JOB = r"""
-import hashlib, json, os, subprocess, sys, time, uuid
-
-job = json.loads(os.environ["JUMPSEAT_JOB"])
-MAIN_WINDOW = "Remmina Remote Desktop Client"
-STARTER = 'powershell -NoP -W Hidden -C "iex (Get-Clipboard -Raw)"'
-
-def out(*cmd):
-    return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.decode(errors="replace").strip()
-
-def get():
-    try:
-        r = subprocess.run(["xclip", "-o", "-selection", "clipboard"], stdout=subprocess.PIPE,
-                           stderr=subprocess.DEVNULL, timeout=5)
-    except subprocess.TimeoutExpired:
-        return None
-    return r.stdout.decode("utf-8", "replace") if r.returncode == 0 else None
-
-def put(text):
-    # xclip stays in the background to serve the selection; detach its output so docker exec returns
-    subprocess.run("xclip -i -selection clipboard >/dev/null 2>&1", shell=True, check=True, input=text.encode())
-    time.sleep(0.3)  # let Remmina offer it to the server
-
-def key(*keys):
-    subprocess.run(["xdotool", "key", "--delay", "80", "--", *keys], check=True)
-
-def frame():
-    png = subprocess.run(["import", "-window", "root", "-depth", "8", "ppm:-"], stdout=subprocess.PIPE, check=True)
-    return hashlib.md5(png.stdout).digest()
-
-# The keys must go to an RDP session: use the focused Remmina connection window, or the only one there is
-sessions = {w: out("xdotool", "getwindowname", w) for w in out("xdotool", "search", "--onlyvisible", "--class", "remmina").split()}
-sessions = {w: n for w, n in sessions.items() if n and n != MAIN_WINDOW}
-active = out("xdotool", "getactivewindow")
-if active not in sessions:
-    if not sessions:
-        sys.exit("No RDP session window is open in Remmina. Connect to the server first.")
-    if len(sessions) > 1:
-        sys.exit("Several RDP windows are open (%s) and none has focus. Click in the one you mean, then try again."
-                 % ", ".join(sorted(sessions.values())))
-    active = next(iter(sessions))
-    subprocess.run(["xdotool", "windowactivate", "--sync", active], check=True)
-    time.sleep(0.3)
-sys.stderr.write("session: %s\n" % sessions[active])
-
-marker = "<<jumpseat-ps %s>>" % uuid.uuid4().hex[:12]
-script = "\n".join([
-    "$ErrorActionPreference='Stop'",
-    "$c=@'", job["command"], "'@",
-    "$o=try{(&([scriptblock]::Create($c))|Out-String -Width 250).TrimEnd()}catch{'ERROR: '+$_.Exception.Message}",
-    "Set-Clipboard -Value ('%s'+$o)" % marker, ""])
-
-old = get()
-put(STARTER)
-before = frame()
-key("super+r")
-deadline = time.monotonic() + 5
-while frame() == before:
-    if time.monotonic() > deadline:
-        put(old or "")
-        sys.exit("The Run box did not open: nothing changed on the screen after Win+R. Nothing was run. "
-                 "Is the session connected, unlocked and able to take keys? Take a screenshot.")
-    time.sleep(0.15)
-time.sleep(0.5)  # the box is still being drawn
-key("ctrl+a", "ctrl+v")
-put(script)
-key("Return")
-
-deadline = time.monotonic() + job["wait"]
-while time.monotonic() < deadline:
-    time.sleep(0.2)
-    data = get()
-    if data and data.startswith(marker):
-        text = data[len(marker):].replace("\r\n", "\n").lstrip("\n")
-        sys.stdout.write(text if text.strip() else "(no output)")
-        sys.exit(1 if text.startswith("ERROR: ") else 0)
-put(old or "")
-sys.exit("No answer from PowerShell within %g s (raise --wait for slow commands). Take a screenshot to see "
-         "what the server shows." % job["wait"])
-"""
-
 # Runs inside the container: talks to Firefox's WebDriver BiDi endpoint (started by the docker/firefox wrapper) and
 # performs the one operation in JUMPSEAT_JOB on the focused, visible tab: evaluate, open a URL, list or use page controls.
 BIDI_CLIENT = r'''
@@ -1045,17 +961,29 @@ def cmd_copy(a):
         print(f"\n[truncated: {len(text)} chars, showing {a.max}; use --max to see more]")
 
 
-def cmd_ps(a):
-    command = a.command.strip()
-    if not command or "\n'@" in "\n" + command:
-        sys.exit("Give a PowerShell command (a line may not start with '@).")
-    r = docker("exec", "-i", "-e", "DISPLAY=:1", "-e", "LANG=C.UTF-8",
-               "-e", f"JUMPSEAT_JOB={json.dumps({'command': command, 'wait': a.wait})}", CONTAINER, "python3", "-",
-               capture=True, check=False, stdin=PS_JOB.encode())
-    err = r.stderr.decode(errors="replace").strip()
+def ps_exchange(job):
+    script = Path(__file__).resolve().with_name("ps_exchange.py").read_bytes()
+    r = docker("exec", "-i", "-e", f"JUMPSEAT_JOB={json.dumps(job)}", CONTAINER, "python3", "-",
+               capture=True, check=False, stdin=script)
     if r.returncode != 0 and not r.stdout:
         require_running()
-        sys.exit(err or f"PowerShell job failed ({r.returncode})")
+        sys.exit(r.stderr.decode(errors="replace").strip() or f"PowerShell file exchange failed ({r.returncode})")
+    return r
+
+
+def cmd_ps_setup(_):
+    scripts = Path(__file__).resolve().parent
+    files = {name: (scripts / name).read_text() for name in
+             ("Start-Jumpseat.ps1", "Invoke-JumpseatCommand.ps1")}
+    r = ps_exchange({"op": "setup", "files": files})
+    print(r.stdout.decode(errors="replace").strip())
+
+
+def cmd_ps(a):
+    if not a.command.strip() or not 1 <= a.wait <= 3600 or a.max < 1:
+        sys.exit("Give a non-empty command, --wait between 1 and 3600 seconds, and a positive --max.")
+    r = ps_exchange({"op": "submit", "command": a.command, "server": a.server, "wait": a.wait})
+    err = r.stderr.decode(errors="replace").strip()
     text = r.stdout.decode(errors="replace")
     print(text[:a.max])
     if len(text) > a.max:
@@ -1264,9 +1192,13 @@ def main():
     s.add_argument("--max", type=int, default=PAGE_MAX_CHARS, help=f"max characters (default {PAGE_MAX_CHARS})")
     s.set_defaults(fn=cmd_copy)
 
-    s = sub.add_parser("ps", help="run a PowerShell command on the Windows server of the open RDP session, print its output")
+    sub.add_parser("ps-setup", help="create the opt-in RDP shared-folder runner; does not execute it").set_defaults(
+        fn=cmd_ps_setup)
+
+    s = sub.add_parser("ps", help="send a script file to a manually enabled visible Windows runner and read its log")
     s.add_argument("command", help='e.g. "Get-ADUser kanord -Properties Title | fl Name,Title"')
-    s.add_argument("--wait", type=float, default=30, metavar="S", help="max seconds to wait for the answer (default 30)")
+    s.add_argument("--server", required=True, help="expected Windows computer name shown by the runner")
+    s.add_argument("--wait", type=int, default=30, metavar="S", help="command timeout, 1..3600 seconds (default 30)")
     s.add_argument("--max", type=int, default=PAGE_MAX_CHARS, help=f"max characters (default {PAGE_MAX_CHARS})")
     s.set_defaults(fn=cmd_ps)
 

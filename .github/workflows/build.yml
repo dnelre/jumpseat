@@ -28,7 +28,15 @@ jobs:
         with:
           persist-credentials: false
       - name: Check jumpseat.py
-        run: python3 -m py_compile scripts/jumpseat.py && python3 scripts/jumpseat.py --help
+        run: |
+          python3 -m py_compile scripts/jumpseat.py
+          python3 scripts/jumpseat.py --help
+          python3 -m unittest discover -s scripts -p 'test_*.py' -v
+      - name: Test PowerShell file runner
+        if: matrix.runner == 'ubuntu-24.04'
+        run: |
+          docker run --rm -v "$PWD:/workspace:ro" mcr.microsoft.com/powershell:7.4-ubuntu-22.04 \
+            pwsh -NoLogo -NoProfile -File /workspace/scripts/test_powershell.ps1
       - name: Check start scripts
         run: bash -n docker/start.sh && sh -n docker/start.d/*.sh docker/bwrap && bash -n scripts/ghcr-cleanup.sh
       - name: Build image
